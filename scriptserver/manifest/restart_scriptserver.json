@@ -1,6 +1,6 @@
 {
   "name": "Restart Scriptserver Container",
-  "script_path": "docker compose down scriptserver && docker compose up scriptserver -d",
-  "description": "Restarts Scriptserver on Localhost",
+  "script_path": "/app/connectors/bifrost/connect_to_ssh.sh docker compose down scriptserver && /app/connectors/bifrost/connect_to_ssh.sh docker compose up scriptserver -d",
+  "description": "Restarts Scriptserver on the remote host via bifrost SSH connector.",
   "requires_terminal": true
 }

@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_SSH_DIR="$PROJECT_DIR/.ssh"
+PROJECT_KEY_PATH="$PROJECT_SSH_DIR/id_rsa"
+HOST_SSH_DIR="$HOME/.ssh"
+AUTHORIZED_KEYS_PATH="$HOST_SSH_DIR/authorized_keys"
+HEIMDALL_KEY_START="### Heimdall key start ###"
+HEIMDALL_KEY_END="### Heimdall key end ###"
+
+run_with_sudo() {
+	if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+		"$@"
+		return
+	fi
+
+	if command -v sudo >/dev/null 2>&1; then
+		sudo "$@"
+		return
+	fi
+
+	echo "ERROR: Need elevated privileges to manage sshd, but sudo is not available." >&2
+	exit 1
+}
+
+is_ssh_port_open() {
+	if command -v ss >/dev/null 2>&1; then
+		ss -lnt 2>/dev/null | awk '{print $4}' | grep -Eq '(^|:)22$'
+		return
+	fi
+
+	if command -v lsof >/dev/null 2>&1; then
+		lsof -nP -iTCP:22 -sTCP:LISTEN >/dev/null 2>&1
+		return
+	fi
+
+	return 1
+}
+
+install_linux_sshd() {
+	if command -v sshd >/dev/null 2>&1; then
+		return
+	fi
+
+	echo "Installing OpenSSH server on the host"
+	if command -v apt-get >/dev/null 2>&1; then
+		run_with_sudo apt-get update
+		run_with_sudo apt-get install -y openssh-server
+	elif command -v dnf >/dev/null 2>&1; then
+		run_with_sudo dnf install -y openssh-server
+	elif command -v yum >/dev/null 2>&1; then
+		run_with_sudo yum install -y openssh-server
+	elif command -v zypper >/dev/null 2>&1; then
+		run_with_sudo zypper --non-interactive install openssh
+	elif command -v pacman >/dev/null 2>&1; then
+		run_with_sudo pacman -Sy --noconfirm openssh
+	elif command -v apk >/dev/null 2>&1; then
+		run_with_sudo apk add openssh
+	else
+		echo "ERROR: Unsupported Linux package manager. Install openssh-server manually." >&2
+		exit 1
+	fi
+}
+
+start_linux_sshd() {
+	if is_ssh_port_open; then
+		return
+	fi
+
+	if command -v systemctl >/dev/null 2>&1; then
+		if systemctl list-unit-files ssh.service >/dev/null 2>&1; then
+			run_with_sudo systemctl enable --now ssh
+		elif systemctl list-unit-files sshd.service >/dev/null 2>&1; then
+			run_with_sudo systemctl enable --now sshd
+		else
+			run_with_sudo systemctl enable --now sshd
+		fi
+	elif command -v service >/dev/null 2>&1; then
+		if service ssh status >/dev/null 2>&1; then
+			run_with_sudo service ssh start
+		else
+			run_with_sudo service sshd start
+		fi
+	elif command -v rc-service >/dev/null 2>&1; then
+		run_with_sudo rc-service sshd start
+	else
+		echo "ERROR: Unable to start sshd automatically on this Linux host." >&2
+		exit 1
+	fi
+}
+
+ensure_linux_sshd() {
+	install_linux_sshd
+	start_linux_sshd
+}
+
+ensure_macos_sshd() {
+	if is_ssh_port_open; then
+		return
+	fi
+
+	if ! command -v systemsetup >/dev/null 2>&1; then
+		echo "ERROR: systemsetup is not available; enable Remote Login manually." >&2
+		exit 1
+	fi
+
+	echo "Enabling Remote Login on macOS"
+	run_with_sudo systemsetup -setremotelogin on >/dev/null
+}
+
+ensure_host_sshd() {
+	if [[ "${HEIMDALL_SKIP_SSHD_SETUP:-}" == "1" ]]; then
+		return
+	fi
+
+	if is_ssh_port_open; then
+		return
+	fi
+
+	case "$(uname -s)" in
+		Linux)
+			ensure_linux_sshd
+			;;
+		Darwin)
+			ensure_macos_sshd
+			;;
+		*)
+			echo "ERROR: Automatic sshd setup is only supported on Linux and macOS." >&2
+			exit 1
+			;;
+	esac
+
+	if ! is_ssh_port_open; then
+		echo "ERROR: sshd setup completed, but port 22 is still not listening." >&2
+		exit 1
+	fi
+}
+
+install_authorized_key_block() {
+	local public_key tmp_file
+	public_key="$(<"$PROJECT_KEY_PATH.pub")"
+	tmp_file="$(mktemp)"
+
+	awk \
+		-v start="$HEIMDALL_KEY_START" \
+		-v end="$HEIMDALL_KEY_END" \
+		'BEGIN { in_block = 0 }\
+		$0 == start { in_block = 1; next }\
+		$0 == end { in_block = 0; next }\
+		in_block == 0 { print }' \
+		"$AUTHORIZED_KEYS_PATH" > "$tmp_file"
+
+	{
+		cat "$tmp_file"
+		echo "$HEIMDALL_KEY_START"
+		echo "$public_key"
+		echo "$HEIMDALL_KEY_END"
+	} > "$AUTHORIZED_KEYS_PATH"
+
+	rm -f "$tmp_file"
+}
+
+mkdir -p "$PROJECT_SSH_DIR"
+chmod 700 "$PROJECT_SSH_DIR"
+
+if [[ ! -f "$PROJECT_KEY_PATH" ]]; then
+	if ! command -v ssh-keygen >/dev/null 2>&1; then
+		echo "ERROR: ssh-keygen is required to create $PROJECT_KEY_PATH" >&2
+		exit 1
+	fi
+
+	echo "Generating SSH key for Heimdall at $PROJECT_KEY_PATH"
+	ssh-keygen -t rsa -b 4096 -f "$PROJECT_KEY_PATH" -N "" -C "heimdall-local" >/dev/null
+fi
+
+chmod 600 "$PROJECT_KEY_PATH"
+if [[ -f "$PROJECT_KEY_PATH.pub" ]]; then
+	chmod 644 "$PROJECT_KEY_PATH.pub"
+fi
+
+mkdir -p "$HOST_SSH_DIR"
+chmod 700 "$HOST_SSH_DIR"
+touch "$AUTHORIZED_KEYS_PATH"
+chmod 600 "$AUTHORIZED_KEYS_PATH"
+
+install_authorized_key_block
+ensure_host_sshd
+
+exec docker compose run --build --rm heimdall "$@"

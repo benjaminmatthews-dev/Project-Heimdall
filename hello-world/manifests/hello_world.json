@@ -1,0 +1,6 @@
+{
+  "name": "Hello World",
+  "script_path": "/app/connectors/bifrost/connect_to_ssh.sh docker compose run --rm hello-world",
+  "description": "Runs the Hello World container on the host via bifrost.",
+  "requires_terminal": true
+}

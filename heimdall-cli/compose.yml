@@ -1,0 +1,10 @@
+services:
+  heimdall:
+    container_name: heimdall
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      HEIMDALL_RUNNERS_DIR: /app/conf/runners
+    stdin_open: true
+    tty: true

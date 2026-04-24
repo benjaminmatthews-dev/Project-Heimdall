@@ -1,22 +1,42 @@
-x-shared-envs: &shared-env
-  - LOG_LEVEL: info
-
-x-manifest-mounts: &manifest-mounts
-  ./aws-connect/manifests:/app/conf/runners/aws-connect
-  ./scriptserver/manifests:/app/conf/runners/scriptserver
+x-shared-env: &shared-env
+  LOG_LEVEL: info
+  BIFROST_HOST_ADDR: ${BIFROST_HOST_ADDR:-host.docker.internal}
+  BIFROST_HOST_USER: ${BIFROST_HOST_USER:-${USER:-}}
+  BIFROST_HOST_KEY_PATH: ${BIFROST_HOST_KEY_PATH:-/app/.ssh/id_rsa}
+  BIFROST_HOST_WORKING_DIR: ${BIFROST_HOST_WORKING_DIR:-${PWD:-}}
+  # OS is set to 'Windows_NT' automatically on Windows; unset on Unix.
+  # SHELL is set to the host shell path on Unix (e.g. /bin/bash); unset on Windows.
+  OS: ${OS:-}
+  SHELL: ${SHELL:-}
 
 services:
   heimdall:
     extends:
-      file: ./heimdall/compose.yml
+      file: ./heimdall-cli/compose.yml
       service: heimdall
     environment:
       <<: *shared-env
-    volumes: 
-      - *manifest-mounts
+    volumes:
+      - ./aws-connect/manifests:/app/conf/runners/aws-connect:ro
+      - ./scriptserver/manifests:/app/conf/runners/scriptserver:ro
+      - ./hello-world/manifests:/app/conf/runners/hello-world:ro
+      - ./bifrost-connector/src:/app/connectors/bifrost:ro
+      - ./.ssh:/app/.ssh:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   scriptserver:
-    extends: 
+    extends:
       file: ./scriptserver/compose.yaml
       service: scriptserver
     environment:
       <<: *shared-env
+    volumes:
+      - ./bifrost-connector/src:/app/connectors/bifrost:ro
+      - ./.ssh:/app/.ssh:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  hello-world:
+    build:
+      context: ./hello-world
+      dockerfile: Dockerfile

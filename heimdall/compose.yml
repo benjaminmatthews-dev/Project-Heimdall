@@ -1,5 +1,0 @@
-services:
-  heimdall:
-    build:
-      context: .
-      dockerfile: Dockerfile

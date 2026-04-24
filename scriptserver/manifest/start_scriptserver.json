@@ -1,6 +1,6 @@
 {
   "name": "Start Scriptserver Container",
-  "script_path": "docker compose up scriptserver -d",
-  "description": "Starts Scriptserver on Localhost",
+  "script_path": "/app/connectors/bifrost/connect_to_ssh.sh docker compose up scriptserver -d",
+  "description": "Starts Scriptserver on the remote host via bifrost SSH connector.",
   "requires_terminal": true
 }

@@ -11,3 +11,4 @@ services:
       - ./src/conf/conf.json:/app/conf/conf.json
       - ./src/conf/theme/theme.css:/app/conf/theme/theme.css
       - ./src/scripts:/app/scripts
+      - ../bifrost-connector/src:/app/connectors/bifrost:ro
