@@ -1,0 +1,4 @@
+#FROM bugy/script-server:latest
+FROM bugy/script-server@sha256:43579b3081ffe0bf86f3c979a73f87505e5a03a3d56553b95dc1c5ae6a8e5dff
+
+RUN apt-get update && apt-get install -y openssh-client

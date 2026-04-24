@@ -1,0 +1,22 @@
+x-shared-envs: &shared-env
+  - LOG_LEVEL: info
+
+x-manifest-mounts: &manifest-mounts
+  ./aws-connect/manifests:/app/conf/runners/aws-connect
+  ./scriptserver/manifests:/app/conf/runners/scriptserver
+
+services:
+  heimdall:
+    extends:
+      file: ./heimdall/compose.yml
+      service: heimdall
+    environment:
+      <<: *shared-env
+    volumes: 
+      - *manifest-mounts
+  scriptserver:
+    extends: 
+      file: ./scriptserver/compose.yaml
+      service: scriptserver
+    environment:
+      <<: *shared-env

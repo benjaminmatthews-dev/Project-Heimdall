@@ -1,0 +1,13 @@
+services:
+  scriptserver:
+    container_name: scriptserver
+    build:
+      context: ./
+      dockerfile: dockerfile.local
+    ports:
+      - "5550:5550"
+    volumes:
+      - ./src/conf/runners:/app/conf/runners
+      - ./src/conf/conf.json:/app/conf/conf.json
+      - ./src/conf/theme/theme.css:/app/conf/theme/theme.css
+      - ./src/scripts:/app/scripts

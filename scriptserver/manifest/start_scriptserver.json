@@ -1,0 +1,6 @@
+{
+  "name": "Start Scriptserver Container",
+  "script_path": "docker compose up scriptserver -d",
+  "description": "Starts Scriptserver on Localhost",
+  "requires_terminal": true
+}

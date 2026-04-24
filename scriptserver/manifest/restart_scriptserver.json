@@ -1,0 +1,6 @@
+{
+  "name": "Restart Scriptserver Container",
+  "script_path": "docker compose down scriptserver && docker compose up scriptserver -d",
+  "description": "Restarts Scriptserver on Localhost",
+  "requires_terminal": true
+}
